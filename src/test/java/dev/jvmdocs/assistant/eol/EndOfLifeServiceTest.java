@@ -1,13 +1,13 @@
 package dev.jvmdocs.assistant.eol;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Collections;
@@ -42,7 +42,7 @@ class EndOfLifeServiceTest {
         List<EndOfLifeService.EolInfo> mockEolInfos = List.of(mockEolInfo);
 
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(ArgumentMatchers.anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(any(ParameterizedTypeReference.class))).thenReturn(mockEolInfos);
@@ -63,7 +63,7 @@ class EndOfLifeServiceTest {
             });
 
         verify(restClient).get();
-        verify(requestHeadersUriSpec).uri("https://endoflife.date/api/spring-boot.json");
+        verify(requestHeadersUriSpec).uri(URI.create("https://endoflife.date/api/spring-boot.json"));
         verify(requestHeadersSpec).accept(MediaType.APPLICATION_JSON);
     }
 
@@ -85,7 +85,7 @@ class EndOfLifeServiceTest {
         List<EndOfLifeService.EolInfo> mockEolInfos = List.of(mockEolInfo);
 
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(ArgumentMatchers.anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(any(ParameterizedTypeReference.class))).thenReturn(mockEolInfos);
@@ -95,7 +95,7 @@ class EndOfLifeServiceTest {
 
         // Then
         assertThat(response).isNotNull();
-        verify(requestHeadersUriSpec).uri("https://endoflife.date/api/visual-studio.json");
+        verify(requestHeadersUriSpec).uri(URI.create("https://endoflife.date/api/visual-studio.json"));
     }
 
     @Test
@@ -105,7 +105,7 @@ class EndOfLifeServiceTest {
         List<EndOfLifeService.EolInfo> emptyResponse = Collections.emptyList();
 
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(ArgumentMatchers.anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.body(any(ParameterizedTypeReference.class))).thenReturn(emptyResponse);
@@ -123,7 +123,7 @@ class EndOfLifeServiceTest {
         EndOfLifeService.Request request = new EndOfLifeService.Request("spring-boot");
 
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(ArgumentMatchers.anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenThrow(HttpServerErrorException.class);
 
@@ -138,12 +138,51 @@ class EndOfLifeServiceTest {
         EndOfLifeService.Request request = new EndOfLifeService.Request("spring-boot");
 
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
-        when(requestHeadersUriSpec.uri(ArgumentMatchers.anyString())).thenReturn(requestHeadersSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenThrow(ResourceAccessException.class);
 
         // Then
         assertThatThrownBy(() -> service.eol(request))
             .isInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenResponseBodyIsAbsent() {
+        // Given
+        EndOfLifeService.Request request = new EndOfLifeService.Request("spring-boot");
+
+        when(restClient.get()).thenReturn(requestHeadersUriSpec);
+        when(requestHeadersUriSpec.uri(any(URI.class))).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.accept(MediaType.APPLICATION_JSON)).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.body(any(ParameterizedTypeReference.class))).thenReturn(null);
+
+        // When
+        EndOfLifeService.Response response = service.eol(request);
+
+        // Then
+        assertThat(response.eolInfos()).isNotNull().isEmpty();
+    }
+
+    @Test
+    void shouldEncodeProductAsSinglePathSegment() {
+        assertThat(EndOfLifeService.productUri("spring-boot"))
+            .isEqualTo(URI.create("https://endoflife.date/api/spring-boot.json"));
+        assertThat(EndOfLifeService.productUri("visual studio"))
+            .isEqualTo(URI.create("https://endoflife.date/api/visual-studio.json"));
+        assertThat(EndOfLifeService.productUri("../admin?x=1#y"))
+            .isEqualTo(URI.create("https://endoflife.date/api/..%2Fadmin%3Fx%3D1%23y.json"));
+    }
+
+    @Test
+    void responseShouldNormalizeNullAndCopyList() {
+        assertThat(new EndOfLifeService.Response(null).eolInfos()).isEmpty();
+
+        List<EndOfLifeService.EolInfo> source = new java.util.ArrayList<>();
+        EndOfLifeService.Response response = new EndOfLifeService.Response(source);
+        source.add(null);
+
+        assertThat(response.eolInfos()).isEmpty();
     }
 }

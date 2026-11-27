@@ -6,10 +6,11 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.function.Function;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
@@ -22,6 +23,8 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 public class EndOfLifeService {
 
     private static final Logger log = LoggerFactory.getLogger(EndOfLifeService.class);
+
+    private static final String PRODUCT_URI_TEMPLATE = "https://endoflife.date/api/{product}.json";
 
     private final RestClient restClient;
 
@@ -40,13 +43,26 @@ public class EndOfLifeService {
         log.info("End of Life API Request: {}", request);
         ParameterizedTypeReference<List<EolInfo>> typeReference = new ParameterizedTypeReference<>() {};
         List<EolInfo> eolInfos = restClient.get()
-                .uri("https://endoflife.date/api/" + request.product().replaceAll("\\s", "-") + ".json")
+                .uri(productUri(request.product()))
                 .accept(APPLICATION_JSON)
                 .retrieve()
                 .body(typeReference);
         Response response = new Response(eolInfos);
         log.info("End of Life API Response: {}", response);
         return response;
+    }
+
+    /**
+     * Builds the API URI for a product. Whitespace becomes {@code -}, as before; the result is
+     * then percent-encoded as a single path segment, so a product name (which may come from the
+     * model as a tool argument) cannot add path segments or a query string.
+     */
+    static URI productUri(String product) {
+        String slug = product.replaceAll("\\s", "-");
+        return UriComponentsBuilder.fromUriString(PRODUCT_URI_TEMPLATE)
+                .encode()
+                .buildAndExpand(slug)
+                .toUri();
     }
 
     /**
@@ -57,7 +73,14 @@ public class EndOfLifeService {
     public record Request(String product) {
     }
 
+    /**
+     * @param eolInfos the lifecycle entries; never {@code null} (an absent or empty API body
+     *                 yields an empty list)
+     */
     public record Response(List<EolInfo> eolInfos) {
+        public Response {
+            eolInfos = eolInfos == null ? List.of() : List.copyOf(eolInfos);
+        }
     }
 
     public record EolInfo(String cycle,
