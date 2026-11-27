@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
 import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
@@ -33,6 +34,8 @@ import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvis
  */
 @Service
 public class DocumentationService {
+
+    private static final int CHAT_MEMORY_RETRIEVE_SIZE = 100;
 
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
@@ -56,59 +59,48 @@ public class DocumentationService {
     }
 
     public Flux<String> chat(Question question, String chatId) {
-        var prompt = getPrompt(question);
+        var prompt = getPrompt(question.query());
         return chatClient.prompt(prompt)
-                .advisors(advisorSpec -> advisorSpec
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 100))
+                .advisors(chatMemory(chatId))
                 .stream()
                 .content();
     }
 
     public Flux<String> eol(EndOfLifeService.Request eolRequest, String chatId) {
-        var prompt = getPrompt(eolRequest);
+        var prompt = getPrompt(eolRequest.product());
         return chatClient.prompt(prompt)
                 .tools(endOfLifeService)
-                .advisors(advisorSpec -> advisorSpec
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 100))
+                .advisors(chatMemory(chatId))
                 .stream()
                 .content();
     }
 
     public Answer ask(Question question, String chatId) {
-        var prompt = getPrompt(question);
+        var prompt = getPrompt(question.query());
         return chatClient.prompt(prompt)
-                .advisors(advisorSpec -> advisorSpec
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 100))
+                .advisors(chatMemory(chatId))
                 .call()
                 .entity(Answer.class);
     }
 
     public EndOfLifeService.Response eolResponse(EndOfLifeService.Request eolRequest, String chatId) {
-        var prompt = getPrompt(eolRequest);
+        var prompt = getPrompt(eolRequest.product());
         return chatClient.prompt(prompt)
                 .tools(endOfLifeService)
-                .advisors(advisorSpec -> advisorSpec
-                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
-                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 100))
+                .advisors(chatMemory(chatId))
                 .call()
                 .entity(EndOfLifeService.Response.class);
     }
 
-    private Prompt getPrompt(EndOfLifeService.Request eolRequest) {
-        SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(this.systemPromptTemplate);
-        var systemMessage = systemPromptTemplate.createMessage();
-        var userMessage = new UserMessage(eolRequest.product());
-        return new Prompt(List.of(systemMessage, userMessage));
+    private Prompt getPrompt(String userText) {
+        var systemMessage = new SystemPromptTemplate(this.systemPromptTemplate).createMessage();
+        return new Prompt(List.of(systemMessage, new UserMessage(userText)));
     }
 
-    private Prompt getPrompt(Question question) {
-        SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(this.systemPromptTemplate);
-        var systemMessage = systemPromptTemplate.createMessage();
-        var userMessage = new UserMessage(question.query());
-        return new Prompt(List.of(systemMessage, userMessage));
+    private static Consumer<ChatClient.AdvisorSpec> chatMemory(String chatId) {
+        return advisorSpec -> advisorSpec
+                .param(CHAT_MEMORY_CONVERSATION_ID_KEY, chatId)
+                .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, CHAT_MEMORY_RETRIEVE_SIZE);
     }
 
 }

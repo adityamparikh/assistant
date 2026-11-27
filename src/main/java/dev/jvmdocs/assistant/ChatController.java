@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
 
 import java.time.Duration;
 
@@ -17,6 +18,10 @@ import java.time.Duration;
 @RestController
 public class ChatController {
 
+    /** Immutable, so one instance is safely shared by every request. */
+    private static final RetryBackoffSpec RETRY = Retry.backoff(3, Duration.ofMillis(100))
+            .maxBackoff(Duration.ofSeconds(1));
+
     private final DocumentationService documentationService;
 
     public ChatController(DocumentationService documentationService) {
@@ -27,15 +32,13 @@ public class ChatController {
     public Flux<String> chat(@RequestBody Question question,
                              @RequestHeader(name="X_CONV_ID", defaultValue="defaultConversation") String conversationId) {
             return documentationService.chat(question, conversationId)
-                    .retryWhen(Retry.backoff(3, Duration.ofMillis(100))
-                            .maxBackoff(Duration.ofSeconds(1)));
+                    .retryWhen(RETRY);
     }
 
     @PostMapping(path = "/eol", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> eol(@RequestBody EndOfLifeService.Request eolRequest,
                              @RequestHeader(name="X_CONV_ID", defaultValue="defaultConversation") String conversationId) {
         return documentationService.eol(eolRequest, conversationId)
-                .retryWhen(Retry.backoff(3, Duration.ofMillis(100))
-                        .maxBackoff(Duration.ofSeconds(1)));
+                .retryWhen(RETRY);
     }
 }
