@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 /**
  * Service for ingesting documents into a vector store for further processing or search capabilities.
@@ -50,9 +49,9 @@ public class IngestionService {
     }
 
     @PostConstruct
-    public void init() throws ExecutionException, InterruptedException {
+    public void init() {
 
-        log.info("Loading Spring Boot Reference PDF into Vector Store");
+        log.info("Loading {} into Vector Store", solrInAction.getFilename());
         var config = PdfDocumentReaderConfig.builder()
                 .withPageExtractedTextFormatter(new ExtractedTextFormatter.Builder()
                         .withNumberOfBottomTextLinesToDelete(0)
