@@ -22,7 +22,7 @@ public class ClientLoggerRequestInterceptor implements ClientHttpRequestIntercep
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body,
-                                        ClientHttpRequestExecution execution) throws IOException, IOException {
+                                        ClientHttpRequestExecution execution) throws IOException {
         logRequest(request, body);
         var response = execution.execute(request, body);
         return logResponse(request, response);
@@ -55,7 +55,7 @@ public class ClientLoggerRequestInterceptor implements ClientHttpRequestIntercep
         headers.forEach((name, values) -> values.forEach(value -> log.info("{}={}", name, value)));
     }
 
-    private static class BufferingClientHttpResponseWrapper implements ClientHttpResponse {
+    private static final class BufferingClientHttpResponseWrapper implements ClientHttpResponse {
         private final ClientHttpResponse response;
         private final byte[] body;
 
